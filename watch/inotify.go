@@ -79,6 +79,13 @@ func (fw *InotifyFileWatcher) ChangeEvents(t *tomb.Tomb, pos int64) (*FileChange
 
 		events := Events(fw.Filename)
 
+		// Check to see the file hasn't been modified already before the watcher started
+		fi, deleted := fw.checkAndNotifyIfModifiedInBetween(changes)
+		if deleted {
+			return
+		}
+		fw.Size = fi.Size()
+
 		for {
 			prevSize := fw.Size
 
@@ -133,4 +140,28 @@ func (fw *InotifyFileWatcher) ChangeEvents(t *tomb.Tomb, pos int64) (*FileChange
 	}()
 
 	return changes, nil
+}
+
+func (fw *InotifyFileWatcher) checkAndNotifyIfModifiedInBetween(changes *FileChanges) (os.FileInfo, bool) {
+	fi, err := os.Stat(fw.Filename)
+	if err != nil {
+		if os.IsNotExist(err) {
+			RemoveWatch(fw.Filename)
+			changes.NotifyDeleted()
+			return nil, true
+		}
+		util.Fatal("Failed to stat file %v: %v", fw.Filename, err)
+	}
+
+	if fw.Size > 0 && fw.Size > fi.Size() { // old file size was larger than now => truncated
+		changes.NotifyTruncated()
+	} else if fw.Size != fi.Size() {
+		changes.NotifyModified()
+	}
+	// there is a corner case of file that was truncated and replaced with exact same amount of bytes, which would
+	// result in no notification. However any subsequent writes will capture that
+	// If the file isn't expected to be written to often and those events cannot be missed, recommend using Polling watcher
+	// instead of inotify
+
+	return fi, false
 }
