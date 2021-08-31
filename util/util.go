@@ -17,14 +17,19 @@ type Logger struct {
 
 var LOGGER = &Logger{log.New(os.Stderr, "", log.LstdFlags)}
 
-// fatal is like panic except it displays only the current goroutine's stack.
+// Fatal is like panic except it displays only the current goroutine's stack.
 func Fatal(format string, v ...interface{}) {
 	// https://github.com/nxadm/log/blob/master/log.go#L45
 	LOGGER.Output(2, fmt.Sprintf("FATAL -- "+format, v...)+"\n"+string(debug.Stack()))
 	os.Exit(1)
 }
 
-// partitionString partitions the string into chunks of given size,
+// Error logs an error message with the current goroutine stack and returns. It doesn't quit.
+func Error(format string, v ...interface{}) {
+	LOGGER.Output(2, fmt.Sprintf("ERROR -- "+format, v...)+"\n"+string(debug.Stack()))
+}
+
+// PartitionString partitions the string into chunks of given size,
 // with the last chunk of variable size.
 func PartitionString(s string, chunkSize int) []string {
 	if chunkSize <= 0 {
