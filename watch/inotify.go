@@ -11,7 +11,7 @@ import (
 
 	"github.com/nxadm/tail/util"
 
-    "github.com/fsnotify/fsnotify"
+	"github.com/fsnotify/fsnotify"
 	"gopkg.in/tomb.v1"
 )
 
@@ -145,15 +145,16 @@ func (fw *InotifyFileWatcher) ChangeEvents(t *tomb.Tomb, pos int64) (*FileChange
 func (fw *InotifyFileWatcher) checkAndNotifyIfModifiedInBetween(changes *FileChanges) (os.FileInfo, bool) {
 	fi, err := os.Stat(fw.Filename)
 	if err != nil {
-		if os.IsNotExist(err) {
-			RemoveWatch(fw.Filename)
-			changes.NotifyDeleted()
-			return nil, true
+		if !os.IsNotExist(err) {
+			util.Error("Failed to stat file %v: %v", fw.Filename, err)
+			// Treat it as a deleted file as we cannot read it anyway.
 		}
-		util.Fatal("Failed to stat file %v: %v", fw.Filename, err)
+		_ = RemoveWatch(fw.Filename)
+		changes.NotifyDeleted()
+		return nil, true
 	}
 
-	if fw.Size > 0 && fw.Size > fi.Size() { // old file size was larger than now => truncated
+	if fw.Size > fi.Size() { // old file size was larger than now => truncated
 		changes.NotifyTruncated()
 	} else if fw.Size != fi.Size() {
 		changes.NotifyModified()
